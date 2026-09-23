@@ -66,7 +66,9 @@ This API uses **Bearer JWT Authentication**.
 Interactive API documentation is available at `/docs` when the server is running.
 You can use the **Authorize** lock icon at the top of the Swagger UI to input your JWT and easily test protected endpoints.
 
-*(Screenshot of Swagger UI belongs here)*
+![Swagger UI Overview](./swagger_screenshot.png)
+
+![Swagger UI Auth Flow](./swagger_auth_screenshot.png)
 
 ## Security Notes
 - Supabase handles passwords. Passwords are never stored by this project.

@@ -1,31 +1,23 @@
-# FlyRank W2 CRUD API
+# FlyRank W3 A2 - Connecting to the database
 
-This is a backend assignment for FlyRank Internship (Backend Track - Week 2).
-It is a simple CRUD API for managing a to-do list, built with Node.js and Express.
+This project is a continuation of the FlyRank Internship CRUD API, now updated to use a real SQLite database for persistent storage instead of an in-memory array.
 
-> **Note:** Data is stored IN-MEMORY and will disappear when the server is restarted. This is expected behavior for this assignment.
+## Why SQLite?
+SQLite is used because it is a lightweight, single-file database that requires zero separate database-server setup. The data is stored in a local file (`tasks.db`), which makes it very simple to manage and ensures that data survives application restarts.
 
-## Technologies Used
-- JavaScript
-- Node.js
-- Express
-- swagger-ui-express
+## Database Details
+- The database file is named `tasks.db`.
+- It is automatically created by the application if it does not exist when the server starts.
+- The `tasks` table and its columns (`id`, `title`, `done`) are also automatically created.
+- Exactly three example tasks are automatically seeded only when the table is completely empty.
+- Because the data persists in `tasks.db`, tasks will survive server stops and restarts. 
+- `tasks.db` is added to `.gitignore` so that it is not tracked by Git, ensuring every fresh clone starts with a clean database.
 
-## How to Install and Run
-1. Clone the repository and navigate to the project directory.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the server:
-   ```bash
-   npm start
-   ```
-*(Alternatively, you can run `node index.js`)*
+## Security (Parameterized Queries)
+All SQL operations use parameterized placeholders (e.g., `WHERE id = ?`) to prevent SQL injection. We do not concatenate user input directly into SQL strings.
 
-The server will start on `http://localhost:3000`.
-
-## API Endpoints
+## API Behavior
+The API contract did not change; only the storage layer changed. The client will not notice any difference in request or response formats.
 
 | Method | Endpoint | Purpose |
 | ------ | -------- | ------- |
@@ -37,58 +29,29 @@ The server will start on `http://localhost:3000`.
 | PUT | `/tasks/:id` | Update task |
 | DELETE | `/tasks/:id` | Delete task |
 
+## How to Install and Run
+1. Clone the repository and navigate to the project directory.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Run the server:
+   ```bash
+   npm start
+   ```
+
+The application will start on `http://localhost:3000` and `tasks.db` will be automatically generated.
+
 ## Swagger UI
-
 Swagger UI is available at: [http://localhost:3000/docs](http://localhost:3000/docs)
-
-*(A screenshot of the Swagger UI is omitted here but it lists and documents all the endpoints allowing you to Try It Out).*
 ![Swagger UI Screenshot](./swagger_screenshot.png)
 
-## Example curl commands
-
-### Create a task
-```bash
-curl -i -X POST http://localhost:3000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Buy milk"}'
-```
-
-**Output:**
-```
-HTTP/1.1 201 Created
-X-Powered-By: Express
-Content-Type: application/json; charset=utf-8
-Content-Length: 40
-Date: Wed, 23 Sep 2026 10:54:36 GMT
-Connection: keep-alive
-Keep-Alive: timeout=5
-
-{"id":4,"title":"Buy milk","done":false}
-```
-
-### List tasks
-```bash
-curl -i http://localhost:3000/tasks
-```
-
-### Update a task
-```bash
-curl -i -X PUT http://localhost:3000/tasks/4 \
-  -H "Content-Type: application/json" \
-  -d '{"done":true}'
-```
-
-### Delete a task
-```bash
-curl -i -X DELETE http://localhost:3000/tasks/4
-```
-
-## Project Structure
-- `index.js` - Main application logic, route definitions, and in-memory store.
-- `swagger.js` - OpenAPI configuration for Swagger UI.
-- `package.json` - Project metadata and dependencies.
-
 ## Stage 4: SQL Exploration
-I opened `tasks.db` and ran:
-`SELECT * FROM tasks WHERE done = 1;`
+I opened `tasks.db` using DB Browser for SQLite and ran:
+```sql
+SELECT * FROM tasks WHERE done = 1;
+```
 This query returned all tasks that have their `done` status set to true (1), which showed me any completed tasks.
+
+*(Please manually take a screenshot of DB Browser for SQLite showing the tasks table and insert it below)*
+![DB Browser Screenshot Placeholder](./db_browser_screenshot.png)

@@ -1,0 +1,23 @@
+require('dotenv').config();
+const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Supabase client initialization
+const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseKey = process.env.SUPABASE_KEY || 'placeholder';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+app.use(express.json());
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+      console.warn("WARNING: SUPABASE_URL or SUPABASE_KEY is missing in .env");
+  }
+});
+
+module.exports = { app, supabase };

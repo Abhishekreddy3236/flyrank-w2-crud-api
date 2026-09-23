@@ -29,13 +29,6 @@ if (count === 0) {
   insertStmt.run('Example task 3', 0);
 }
 
-// Keeping the in-memory array for now so the app doesn't crash until Stage 1
-let tasks = [
-  { id: 1, title: "Example task 1", done: false },
-  { id: 2, title: "Example task 2", done: true },
-  { id: 3, title: "Example task 3", done: false }
-];
-
 app.get('/', (req, res) => {
   res.json({
     name: "Task API",
@@ -49,17 +42,26 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/tasks', (req, res) => {
+  const stmt = db.prepare('SELECT * FROM tasks');
+  const rows = stmt.all();
+  // Map SQLite integers back to boolean
+  const tasks = rows.map(row => ({
+    ...row,
+    done: !!row.done
+  }));
   res.json(tasks);
 });
 
 app.get('/tasks/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const task = tasks.find(t => t.id === id);
+  const stmt = db.prepare('SELECT * FROM tasks WHERE id = ?');
+  const task = stmt.get(id);
   
   if (!task) {
-    return res.status(404).json({ error: `Task ${id} not found` });
+    return res.status(404).json({ error: "Task not found" });
   }
   
+  task.done = !!task.done;
   res.json(task);
 });
 

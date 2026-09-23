@@ -87,3 +87,8 @@ curl -i -X DELETE http://localhost:3000/tasks/4
 - `index.js` - Main application logic, route definitions, and in-memory store.
 - `swagger.js` - OpenAPI configuration for Swagger UI.
 - `package.json` - Project metadata and dependencies.
+
+## Stage 4: SQL Exploration
+I opened `tasks.db` and ran:
+`SELECT * FROM tasks WHERE done = 1;`
+This query returned all tasks that have their `done` status set to true (1), which showed me any completed tasks.

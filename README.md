@@ -73,3 +73,73 @@ This assignment implements a secure authentication API using JWTs.
 
 ### A4 Swagger API
 ![A4 Swagger UI Screenshot](./A4-auth/swagger_screenshot.png)
+
+## A3 — Containerize Your Stack
+
+### Description
+The CRUD API has been migrated from SQLite to PostgreSQL and containerized using Docker and Docker Compose. 
+
+### Architecture & Technology Stack
+- **Node.js / Express.js**: API framework
+- **PostgreSQL**: Relational database
+- **pg**: Node.js PostgreSQL driver
+- **Docker**: Containerization
+- **Docker Compose**: Multi-container orchestration
+
+### PostgreSQL & Docker Configuration
+The application is composed of two containers communicating over a Docker Compose network:
+1. **API container** (Node.js)
+2. **Database container** (`taskdb` running `postgres:16`)
+
+The PostgreSQL database is configured securely via environment variables and initialized automatically. Inside the Compose network, the API connects to the database via the service name (`DB_HOST=db`).
+
+### Database Persistence & Seed Behaviour
+- The PostgreSQL data is persisted locally using a named Docker volume called `taskdata`. This ensures that data survives container stops, removals, and recreations.
+- Upon startup, the API automatically connects to PostgreSQL and creates the `tasks` table if it doesn't exist.
+- Exactly three seed tasks are inserted automatically **only** when the table is empty. Restarting the stack will not duplicate these tasks.
+
+### Environment Variables
+A sample environment file is provided as `.env.example`. This file documents the required variables (e.g., `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`). The actual `.env` file must **not** be committed to the repository for security reasons.
+
+### How to Start the Complete Stack
+To run the stack on a fresh clone (no manual PostgreSQL installation required):
+
+1. Copy the environment file template:
+   ```bash
+   cp .env.example .env
+   ```
+2. Build and start the containers using Docker Compose:
+   ```bash
+   docker compose up --build
+   ```
+
+### API Endpoints
+The API endpoints remain exactly the same as in A1/A2, now fully backed by parameterized PostgreSQL queries:
+- `GET /tasks`
+- `GET /tasks/:id`
+- `POST /tasks`
+- `PUT /tasks/:id`
+- `DELETE /tasks/:id`
+
+Swagger UI is still available at `http://localhost:3000/docs`.
+
+### Testing and Stopping the Stack
+To verify the API is running, you can hit the health check or tasks endpoints:
+```bash
+curl http://localhost:3000/health
+curl http://localhost:3000/tasks
+```
+
+To stop the stack safely:
+```bash
+docker compose down
+```
+To remove the stack and delete the persistent volume (WARNING: this deletes the data):
+```bash
+docker compose down -v
+```
+
+### PostgreSQL Screenshot
+Here is a screenshot of the PostgreSQL database tasks table, populated dynamically:
+
+![PostgreSQL Screenshot](./postgres_screenshot.png)

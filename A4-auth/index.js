@@ -15,7 +15,7 @@ app.use(express.json());
 
 app.use('/auth', require('./routes/auth')(supabase));
 app.use('/public', require('./routes/public')());
-app.use('/protected', require('./routes/protected')());
+app.use('/protected', require('./routes/protected')(supabase));
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

@@ -37,22 +37,35 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
   }
 }
 
-async function fetchAndCache(url, cacheFilename) {
+async function fetchAndCache(url, cacheFilename, isRetry = false) {
   const cachePath = path.join(CACHE_DIR, cacheFilename);
   if (fs.existsSync(cachePath)) {
     const html = fs.readFileSync(cachePath, 'utf8');
-    return { html, cached: true };
+    return { html, cached: true, ok: true };
   }
-  const response = await fetchWithTimeout(url);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
+  
+  try {
+    const response = await fetchWithTimeout(url);
+    if (!response.ok) {
+      if (!isRetry && (response.status >= 500 || response.status === 408)) {
+        await sleep(1000);
+        return fetchAndCache(url, cacheFilename, true);
+      }
+      return { html: null, cached: false, ok: false, error: `HTTP ${response.status}` };
+    }
+    const html = await response.text();
+    fs.writeFileSync(cachePath, html, 'utf8');
+    return { html, cached: false, ok: true };
+  } catch (error) {
+    if (!isRetry) {
+      await sleep(1000);
+      return fetchAndCache(url, cacheFilename, true);
+    }
+    return { html: null, cached: false, ok: false, error: error.message };
   }
-  const html = await response.text();
-  fs.writeFileSync(cachePath, html, 'utf8');
-  return { html, cached: false };
 }
 
-async function discoverCataloguePages() {
+async function discoverCataloguePages(stats) {
   let currentUrl = 'https://books.toscrape.com/catalogue/page-1.html';
   const maxPages = 3;
   let pagesProcessed = 0;
@@ -62,7 +75,14 @@ async function discoverCataloguePages() {
     const pageNumber = pagesProcessed + 1;
     const cacheFilename = `catalogue-page-${pageNumber}.html`;
     
-    const { html, cached } = await fetchAndCache(currentUrl, cacheFilename);
+    const { html, cached, ok, error } = await fetchAndCache(currentUrl, cacheFilename);
+    stats.pages_fetched++;
+    if (cached) stats.cache_hits++;
+    
+    if (!ok) {
+      console.error(`Failed to fetch catalogue page: ${error}`);
+      break;
+    }
     if (!cached) {
       await sleep(500);
     }
@@ -93,7 +113,16 @@ async function discoverCataloguePages() {
     }
   }
   
-  return Array.from(uniqueUrlsMap.entries()).map(([url, sourcePage]) => ({ url, sourcePage }));
+  const links = Array.from(uniqueUrlsMap.entries()).map(([url, sourcePage]) => ({ url, sourcePage }));
+  
+  if (process.env.FAILURE_TEST === '1') {
+    links.push({
+      url: 'https://books.toscrape.com/catalogue/this-book-does-not-exist_9999/index.html',
+      sourcePage: 'https://books.toscrape.com/catalogue/page-1.html'
+    });
+  }
+  
+  return links;
 }
 
 function safeText($, selector) {
@@ -115,14 +144,23 @@ const BookSchema = z.object({
   fetched_at: z.string().datetime()
 });
 
-async function extractBookDetails(bookLinks) {
+async function extractBookDetails(bookLinks, stats) {
   const records = [];
 
   for (const link of bookLinks) {
     const { url, sourcePage } = link;
     const cacheFilename = `book-${encodeURIComponent(url.replace('https://books.toscrape.com/catalogue/', ''))}.html`;
 
-    const { html, cached } = await fetchAndCache(url, cacheFilename);
+    const { html, cached, ok, error } = await fetchAndCache(url, cacheFilename);
+    stats.pages_fetched++;
+    if (cached) stats.cache_hits++;
+    
+    if (!ok) {
+      console.error(`Failed to fetch ${url}: ${error}`);
+      stats.failed_pages++;
+      continue;
+    }
+    
     if (!cached) {
       await sleep(500);
     }
@@ -161,15 +199,13 @@ async function extractBookDetails(bookLinks) {
   return records;
 }
 
-function processRecords(rawRecords) {
+function processRecords(rawRecords, stats) {
   const validRecords = [];
   const invalidRecords = [];
   
-  // Create a map to ensure idempotency / dedup by product URL
   const uniqueRecordsMap = new Map();
 
   for (const raw of rawRecords) {
-    // Normalize
     const normalized = { ...raw };
     if (typeof normalized.price_text === 'string') {
       const match = normalized.price_text.match(/[\d.]+/);
@@ -178,7 +214,6 @@ function processRecords(rawRecords) {
       }
     }
 
-    // Validate
     const parsed = BookSchema.safeParse(normalized);
     if (parsed.success) {
       uniqueRecordsMap.set(parsed.data.product_url, parsed.data);
@@ -190,24 +225,40 @@ function processRecords(rawRecords) {
     }
   }
 
-  return {
-    valid: Array.from(uniqueRecordsMap.values()),
-    invalid: invalidRecords
-  };
+  const valid = Array.from(uniqueRecordsMap.values());
+  stats.valid_records = valid.length;
+  stats.invalid_records = invalidRecords.length;
+
+  return { valid, invalid: invalidRecords };
 }
 
 async function main() {
+  const startTime = Date.now();
+  const stats = {
+    start_time: new Date().toISOString(),
+    duration_seconds: 0,
+    pages_fetched: 0,
+    cache_hits: 0,
+    valid_records: 0,
+    invalid_records: 0,
+    failed_pages: 0
+  };
+
   try {
-    const bookLinks = await discoverCataloguePages();
-    const rawRecords = await extractBookDetails(bookLinks);
+    const bookLinks = await discoverCataloguePages(stats);
+    const rawRecords = await extractBookDetails(bookLinks, stats);
     
-    const { valid, invalid } = processRecords(rawRecords);
+    const { valid, invalid } = processRecords(rawRecords, stats);
     
     fs.writeFileSync(path.join(OUTPUT_DIR, 'books.json'), JSON.stringify(valid, null, 2), 'utf8');
     fs.writeFileSync(path.join(OUTPUT_DIR, 'errors.json'), JSON.stringify(invalid, null, 2), 'utf8');
     
+    stats.duration_seconds = Math.round((Date.now() - startTime) / 1000);
+    fs.writeFileSync(path.join(OUTPUT_DIR, 'run-report.json'), JSON.stringify(stats, null, 2), 'utf8');
+    
     console.log(`Saved ${valid.length} valid records to books.json`);
     console.log(`Saved ${invalid.length} invalid records to errors.json`);
+    console.log(`Run report saved to run-report.json`);
   } catch (error) {
     console.error('Error during scraping:', error);
   }

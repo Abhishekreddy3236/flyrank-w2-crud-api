@@ -8,6 +8,39 @@ const port = 3000;
 app.use(express.json());
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+require('dotenv').config();
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'tasks',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'dev'
+});
+
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        done BOOLEAN DEFAULT FALSE
+      )
+    `);
+    const { rows } = await pool.query('SELECT COUNT(*) AS count FROM tasks');
+    if (parseInt(rows[0].count, 10) === 0) {
+      await pool.query('INSERT INTO tasks (title, done) VALUES ($1, $2)', ['Example task 1', false]);
+      await pool.query('INSERT INTO tasks (title, done) VALUES ($1, $2)', ['Example task 2', true]);
+      await pool.query('INSERT INTO tasks (title, done) VALUES ($1, $2)', ['Example task 3', false]);
+    }
+    console.log('Database initialized successfully');
+  } catch (err) {
+    console.error('Database initialization error:', err);
+  }
+}
+initDB();
+
 const Database = require('better-sqlite3');
 const db = new Database('tasks.db');
 

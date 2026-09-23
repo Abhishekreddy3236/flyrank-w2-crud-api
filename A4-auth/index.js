@@ -13,6 +13,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(express.json());
 
+app.use('/auth', require('./routes/auth')(supabase));
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {

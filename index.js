@@ -86,9 +86,9 @@ app.post('/tasks', (req, res) => {
 
 app.put('/tasks/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const taskIndex = tasks.findIndex(t => t.id === id);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
   
-  if (taskIndex === -1) {
+  if (!task) {
     return res.status(404).json({ error: `Task ${id} not found` });
   }
 
@@ -104,24 +104,25 @@ app.put('/tasks/:id', (req, res) => {
   }
 
   const updatedTask = {
-    ...tasks[taskIndex],
-    ...(title !== undefined && { title: title.trim() }),
-    ...(done !== undefined && { done })
+    id: task.id,
+    title: title !== undefined ? title.trim() : task.title,
+    done: done !== undefined ? done : !!task.done
   };
 
-  tasks[taskIndex] = updatedTask;
+  db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?')
+    .run(updatedTask.title, updatedTask.done ? 1 : 0, id);
+
   res.json(updatedTask);
 });
 
 app.delete('/tasks/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const taskIndex = tasks.findIndex(t => t.id === id);
+  const info = db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
   
-  if (taskIndex === -1) {
+  if (info.changes === 0) {
     return res.status(404).json({ error: `Task ${id} not found` });
   }
 
-  tasks.splice(taskIndex, 1);
   res.status(204).send();
 });
 

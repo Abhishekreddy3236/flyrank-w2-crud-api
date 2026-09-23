@@ -41,26 +41,7 @@ async function initDB() {
 }
 initDB();
 
-const Database = require('better-sqlite3');
-const db = new Database('tasks.db');
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY,
-    title TEXT,
-    done BOOLEAN
-  )
-`);
-
-const countStmt = db.prepare('SELECT COUNT(*) AS count FROM tasks');
-const { count } = countStmt.get();
-
-if (count === 0) {
-  const insertStmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  insertStmt.run('Example task 1', 0);
-  insertStmt.run('Example task 2', 1);
-  insertStmt.run('Example task 3', 0);
-}
 
 app.get('/', (req, res) => {
   res.json({

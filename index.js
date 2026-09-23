@@ -96,65 +96,68 @@ app.get('/tasks/:id', async (req, res) => {
   }
 });
 
-app.post('/tasks', (req, res) => {
+app.post('/tasks', async (req, res) => {
   const { title } = req.body;
   if (!title || title.trim() === '') {
     return res.status(400).json({ error: "Title is required and cannot be empty" });
   }
 
   const cleanTitle = title.trim();
-  const stmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  const info = stmt.run(cleanTitle, 0);
-
-  const newTask = {
-    id: info.lastInsertRowid,
-    title: cleanTitle,
-    done: false
-  };
-
-  res.status(201).json(newTask);
+  try {
+    const result = await pool.query(
+      'INSERT INTO tasks (title, done) VALUES ($1, $2) RETURNING *',
+      [cleanTitle, false]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
-app.put('/tasks/:id', (req, res) => {
+app.put('/tasks/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  
-  if (!task) {
-    return res.status(404).json({ error: `Task ${id} not found` });
-  }
+  try {
+    const resultTask = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    if (resultTask.rows.length === 0) {
+      return res.status(404).json({ error: `Task ${id} not found` });
+    }
+    const task = resultTask.rows[0];
 
-  const { title, done } = req.body;
-  if (!req.body || (title === undefined && done === undefined)) {
-    return res.status(400).json({ error: "At least 'title' or 'done' field is required to update" });
-  }
-  if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) {
-    return res.status(400).json({ error: "Title must be a non-empty string" });
-  }
-  if (done !== undefined && typeof done !== 'boolean') {
-    return res.status(400).json({ error: "Done must be a boolean" });
-  }
+    const { title, done } = req.body;
+    if (!req.body || (title === undefined && done === undefined)) {
+      return res.status(400).json({ error: "At least 'title' or 'done' field is required to update" });
+    }
+    if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) {
+      return res.status(400).json({ error: "Title must be a non-empty string" });
+    }
+    if (done !== undefined && typeof done !== 'boolean') {
+      return res.status(400).json({ error: "Done must be a boolean" });
+    }
 
-  const updatedTask = {
-    id: task.id,
-    title: title !== undefined ? title.trim() : task.title,
-    done: done !== undefined ? done : !!task.done
-  };
+    const updatedTitle = title !== undefined ? title.trim() : task.title;
+    const updatedDone = done !== undefined ? done : task.done;
 
-  db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?')
-    .run(updatedTask.title, updatedTask.done ? 1 : 0, id);
-
-  res.json(updatedTask);
+    const updateResult = await pool.query(
+      'UPDATE tasks SET title = $1, done = $2 WHERE id = $3 RETURNING *',
+      [updatedTitle, updatedDone, id]
+    );
+    res.json(updateResult.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
-app.delete('/tasks/:id', (req, res) => {
+app.delete('/tasks/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const info = db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
-  
-  if (info.changes === 0) {
-    return res.status(404).json({ error: `Task ${id} not found` });
+  try {
+    const result = await pool.query('DELETE FROM tasks WHERE id = $1', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: `Task ${id} not found` });
+    }
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  res.status(204).send();
 });
 
 app.listen(port, () => {

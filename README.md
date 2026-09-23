@@ -53,5 +53,4 @@ SELECT * FROM tasks WHERE done = 1;
 ```
 This query returned all tasks that have their `done` status set to true (1), which showed me any completed tasks.
 
-*(Please manually take a screenshot of DB Browser for SQLite showing the tasks table and insert it below)*
-![DB Browser Screenshot Placeholder](./db_browser_screenshot.png)
+![DB Browser Screenshot](./db_browser_screenshot.png)

@@ -74,28 +74,26 @@ app.get('/health', (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.get('/tasks', (req, res) => {
-  const stmt = db.prepare('SELECT * FROM tasks');
-  const rows = stmt.all();
-  // Map SQLite integers back to boolean
-  const tasks = rows.map(row => ({
-    ...row,
-    done: !!row.done
-  }));
-  res.json(tasks);
+app.get('/tasks', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM tasks ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
-app.get('/tasks/:id', (req, res) => {
+app.get('/tasks/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const stmt = db.prepare('SELECT * FROM tasks WHERE id = ?');
-  const task = stmt.get(id);
-  
-  if (!task) {
-    return res.status(404).json({ error: "Task not found" });
+  try {
+    const result = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
-  
-  task.done = !!task.done;
-  res.json(task);
 });
 
 app.post('/tasks', (req, res) => {

@@ -17,6 +17,10 @@ app.use('/auth', require('./routes/auth')(supabase));
 app.use('/public', require('./routes/public')());
 app.use('/protected', require('./routes/protected')(supabase));
 
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger');
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {

@@ -79,10 +79,10 @@ Rerunning the scraper will not produce duplicate records. It processes unique UR
 ## Sample Run Report
 ```json
 {
-  "start_time": "2026-09-24T00:00:00.000Z",
-  "duration_seconds": 15,
+  "start_time": "2026-09-23T18:37:55.064Z",
+  "duration_seconds": 0,
   "pages_fetched": 63,
-  "cache_hits": 0,
+  "cache_hits": 63,
   "valid_records": 60,
   "invalid_records": 0,
   "failed_pages": 0

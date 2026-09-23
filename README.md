@@ -143,3 +143,14 @@ docker compose down -v
 Here is a screenshot of the PostgreSQL database tasks table, populated dynamically:
 
 ![PostgreSQL Screenshot](./postgres_screenshot.png)
+
+## A9 (W5) — The Polite Scraper
+
+This repository includes the completed "The Polite Scraper" assignment.
+The scraper targets the Books to Scrape practice sandbox, safely extracting, normalizing, and validating exactly 60 book records across the first 3 catalogue pages.
+
+- **Tech stack**: Node.js, built-in fetch, Cheerio, Zod
+- **Politeness features**: User-Agent identification, ≥500ms delay between requests, timeouts, and local HTML caching.
+- **Validation**: Strict Zod schemas normalize pricing to GBP and ensure clean, validated output data. 
+- **Failure Resilience**: The scraper independently handles page failures without crashing the entire run.
+- **Link**: [scraper/](./scraper/) (See `scraper/README.md` for run instructions and reports).

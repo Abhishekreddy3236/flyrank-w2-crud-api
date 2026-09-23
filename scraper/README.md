@@ -89,6 +89,24 @@ Rerunning the scraper will not produce duplicate records. It processes unique UR
 }
 ```
 
+## Failure Test Evidence
+To verify resilience, a deliberate failure test was conducted by injecting one fake/broken URL into the list of discovered links (`this-book-does-not-exist_9999`). 
+The scraper correctly handled the 404 error without crashing, successfully fetched the remaining 60 valid records, and recorded the failed page.
+
+Sample output from the failure test (`run-report.json`):
+```json
+{
+  "start_time": "2026-09-23T18:37:26.523Z",
+  "duration_seconds": 2,
+  "pages_fetched": 64,
+  "cache_hits": 63,
+  "valid_records": 60,
+  "invalid_records": 0,
+  "failed_pages": 1
+}
+```
+During normal execution, no fake URLs are inserted, ensuring exactly 60 valid records and 0 failures.
+
 ## Limitations
 One limitation is that this scraper is heavily coupled to the HTML structure of `books.toscrape.com`. Any changes to the CSS classes or DOM structure on the target site will break the extraction logic.
 

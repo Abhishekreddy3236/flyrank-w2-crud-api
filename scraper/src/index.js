@@ -1,12 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const cheerio = require('cheerio');
+const { z } = require('zod');
 
 const USER_AGENT = 'FlyRankInternship-A9/1.0 (+https://github.com/Abhishekreddy3236/flyrank-w2-crud-api)';
 const CACHE_DIR = path.join(__dirname, '..', 'cache');
 const OUTPUT_DIR = path.join(__dirname, '..', 'output');
 
-// Ensure directories exist
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -39,18 +39,14 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 
 async function fetchAndCache(url, cacheFilename) {
   const cachePath = path.join(CACHE_DIR, cacheFilename);
-
   if (fs.existsSync(cachePath)) {
     const html = fs.readFileSync(cachePath, 'utf8');
     return { html, cached: true };
   }
-
   const response = await fetchWithTimeout(url);
-
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${url}`);
   }
-
   const html = await response.text();
   fs.writeFileSync(cachePath, html, 'utf8');
   return { html, cached: false };
@@ -60,7 +56,6 @@ async function discoverCataloguePages() {
   let currentUrl = 'https://books.toscrape.com/catalogue/page-1.html';
   const maxPages = 3;
   let pagesProcessed = 0;
-  
   const allDiscoveredUrls = [];
   
   while (currentUrl && pagesProcessed < maxPages) {
@@ -69,13 +64,12 @@ async function discoverCataloguePages() {
     
     const { html, cached } = await fetchAndCache(currentUrl, cacheFilename);
     if (!cached) {
-      await sleep(500); // Politely wait between real requests
+      await sleep(500);
     }
     
     pagesProcessed++;
     const $ = cheerio.load(html);
     
-    // Extract book links
     $('.product_pod h3 a').each((_, el) => {
       const href = $(el).attr('href');
       if (href) {
@@ -84,7 +78,6 @@ async function discoverCataloguePages() {
       }
     });
     
-    // Find next page
     const nextUrlRel = $('.next a').attr('href');
     if (nextUrlRel && pagesProcessed < maxPages) {
       currentUrl = new URL(nextUrlRel, currentUrl).href;
@@ -110,18 +103,28 @@ function safeText($, selector) {
   return text || null;
 }
 
+const BookSchema = z.object({
+  title: z.string().min(1),
+  product_url: z.string().url().startsWith('https://'),
+  price_text: z.string(),
+  price_gbp: z.number().nonnegative(),
+  availability_text: z.string(),
+  rating_text: z.string().nullable(),
+  description: z.string().nullable(),
+  source_page: z.string().url(),
+  fetched_at: z.string().datetime()
+});
+
 async function extractBookDetails(bookLinks) {
   const records = [];
-  let detailPagesProcessed = 0;
 
   for (const link of bookLinks) {
     const { url, sourcePage } = link;
-    // Generate a safe cache filename
     const cacheFilename = `book-${encodeURIComponent(url.replace('https://books.toscrape.com/catalogue/', ''))}.html`;
 
     const { html, cached } = await fetchAndCache(url, cacheFilename);
     if (!cached) {
-      await sleep(500); // Politely wait between real requests
+      await sleep(500);
     }
 
     const $ = cheerio.load(html);
@@ -153,24 +156,58 @@ async function extractBookDetails(bookLinks) {
       source_page: sourcePage,
       fetched_at: new Date().toISOString()
     });
-
-    detailPagesProcessed++;
   }
 
-  if (records.length > 0) {
-    console.log('--- Sample Raw Record ---');
-    console.log(JSON.stringify(records[0], null, 2));
-  }
-
-  console.log(`detail_pages=${detailPagesProcessed}`);
-  
   return records;
+}
+
+function processRecords(rawRecords) {
+  const validRecords = [];
+  const invalidRecords = [];
+  
+  // Create a map to ensure idempotency / dedup by product URL
+  const uniqueRecordsMap = new Map();
+
+  for (const raw of rawRecords) {
+    // Normalize
+    const normalized = { ...raw };
+    if (typeof normalized.price_text === 'string') {
+      const match = normalized.price_text.match(/[\d.]+/);
+      if (match) {
+        normalized.price_gbp = parseFloat(match[0]);
+      }
+    }
+
+    // Validate
+    const parsed = BookSchema.safeParse(normalized);
+    if (parsed.success) {
+      uniqueRecordsMap.set(parsed.data.product_url, parsed.data);
+    } else {
+      invalidRecords.push({
+        record: raw,
+        error: parsed.error.issues
+      });
+    }
+  }
+
+  return {
+    valid: Array.from(uniqueRecordsMap.values()),
+    invalid: invalidRecords
+  };
 }
 
 async function main() {
   try {
     const bookLinks = await discoverCataloguePages();
-    await extractBookDetails(bookLinks);
+    const rawRecords = await extractBookDetails(bookLinks);
+    
+    const { valid, invalid } = processRecords(rawRecords);
+    
+    fs.writeFileSync(path.join(OUTPUT_DIR, 'books.json'), JSON.stringify(valid, null, 2), 'utf8');
+    fs.writeFileSync(path.join(OUTPUT_DIR, 'errors.json'), JSON.stringify(invalid, null, 2), 'utf8');
+    
+    console.log(`Saved ${valid.length} valid records to books.json`);
+    console.log(`Saved ${invalid.length} invalid records to errors.json`);
   } catch (error) {
     console.error('Error during scraping:', error);
   }

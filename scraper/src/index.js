@@ -42,11 +42,9 @@ async function fetchAndCache(url, cacheFilename) {
 
   if (fs.existsSync(cachePath)) {
     const html = fs.readFileSync(cachePath, 'utf8');
-    console.log(`CACHE HIT ${url} (${html.length} bytes)`);
     return { html, cached: true };
   }
 
-  console.log(`FETCH ${url}`);
   const response = await fetchWithTimeout(url);
 
   if (!response.ok) {
@@ -54,7 +52,6 @@ async function fetchAndCache(url, cacheFilename) {
   }
 
   const html = await response.text();
-  console.log(`FETCHED ${url} (${html.length} bytes)`);
   fs.writeFileSync(cachePath, html, 'utf8');
   return { html, cached: false };
 }
@@ -96,19 +93,84 @@ async function discoverCataloguePages() {
     }
   }
   
-  const uniqueUrls = new Set(allDiscoveredUrls.map(item => item.url));
+  const uniqueUrlsMap = new Map();
+  for (const item of allDiscoveredUrls) {
+    if (!uniqueUrlsMap.has(item.url)) {
+      uniqueUrlsMap.set(item.url, item.sourcePage);
+    }
+  }
   
-  console.log('--- Checkpoint ---');
-  console.log(`catalogue_pages=${pagesProcessed}`);
-  console.log(`discovered=${allDiscoveredUrls.length}`);
-  console.log(`unique_urls=${uniqueUrls.size}`);
+  return Array.from(uniqueUrlsMap.entries()).map(([url, sourcePage]) => ({ url, sourcePage }));
+}
+
+function safeText($, selector) {
+  const el = $(selector).first();
+  if (!el.length) return null;
+  const text = el.text().trim();
+  return text || null;
+}
+
+async function extractBookDetails(bookLinks) {
+  const records = [];
+  let detailPagesProcessed = 0;
+
+  for (const link of bookLinks) {
+    const { url, sourcePage } = link;
+    // Generate a safe cache filename
+    const cacheFilename = `book-${encodeURIComponent(url.replace('https://books.toscrape.com/catalogue/', ''))}.html`;
+
+    const { html, cached } = await fetchAndCache(url, cacheFilename);
+    if (!cached) {
+      await sleep(500); // Politely wait between real requests
+    }
+
+    const $ = cheerio.load(html);
+
+    const title = safeText($, '.product_main h1');
+    const priceText = safeText($, '.product_main .price_color');
+    const availabilityText = safeText($, '.product_main .instock.availability');
+    
+    let ratingText = null;
+    const starRatingEl = $('.product_main .star-rating');
+    if (starRatingEl.length) {
+      const classes = starRatingEl.attr('class').split(' ');
+      ratingText = classes.find(c => c !== 'star-rating') || null;
+    }
+
+    let description = null;
+    const descHeader = $('#product_description');
+    if (descHeader.length) {
+      description = descHeader.next('p').text().trim() || null;
+    }
+
+    records.push({
+      title,
+      product_url: url,
+      price_text: priceText,
+      availability_text: availabilityText,
+      rating_text: ratingText,
+      description,
+      source_page: sourcePage,
+      fetched_at: new Date().toISOString()
+    });
+
+    detailPagesProcessed++;
+  }
+
+  if (records.length > 0) {
+    console.log('--- Sample Raw Record ---');
+    console.log(JSON.stringify(records[0], null, 2));
+  }
+
+  console.log(`detail_pages=${detailPagesProcessed}`);
   
-  return Array.from(uniqueUrls).map(url => allDiscoveredUrls.find(item => item.url === url));
+  return records;
 }
 
 async function main() {
   try {
     const bookLinks = await discoverCataloguePages();
+    await extractBookDetails(bookLinks);
   } catch (error) {
     console.error('Error during scraping:', error);
   }

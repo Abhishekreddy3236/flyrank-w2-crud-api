@@ -41,5 +41,17 @@ module.exports = (supabase) => {
     });
   });
 
+  const authMiddleware = require('../middleware/auth');
+  
+  router.post('/logout', authMiddleware(supabase), async (req, res) => {
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      return res.status(500).json({ error: 'Failed to logout' });
+    }
+    
+    res.status(204).send();
+  });
+
   return router;
 };
